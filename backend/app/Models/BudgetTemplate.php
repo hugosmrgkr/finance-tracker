@@ -4,21 +4,17 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Transaction extends Model
+class BudgetTemplate extends Model
 {
     protected $fillable = [
         'user_id',
         'category_id',
-        'wallet_id',
         'amount',
-        'type',
-        'date',
         'note',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
-        'date' => 'date',
     ];
 
     public function user()
@@ -30,10 +26,4 @@ class Transaction extends Model
     {
         return $this->belongsTo(Category::class);
     }
-
-    public function wallet()
-    {
-        return $this->belongsTo(Wallet::class);
-    }
 }
-

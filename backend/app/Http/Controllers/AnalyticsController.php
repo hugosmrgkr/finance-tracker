@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Budget;
 use App\Models\Transaction;
+use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -837,6 +838,212 @@ class AnalyticsController extends Controller
                 'utilization_pct' => $totalUtilization,
             ],
             'categories' => $categories,
+        ]);
+    }
+
+    public function budgetSummary(Request $request)
+    {
+        $rules = $this->baseRules($request);
+        $rules['year'] = ['nullable', 'integer', 'min:1900', 'max:2100'];
+        $rules['month'] = ['nullable', 'integer', 'min:1', 'max:12'];
+        $rules['limit'] = ['nullable', 'integer', 'min:1', 'max:50'];
+
+        $validated = $request->validate($rules);
+        $userId = $this->resolveUserId($request, $validated);
+
+        $year = (int) ($validated['year'] ?? now()->year);
+        $month = (int) ($validated['month'] ?? now()->month);
+        $limit = (int) ($validated['limit'] ?? 5);
+
+        $periodStart = Carbon::createFromDate($year, $month, 1)->startOfMonth();
+        $periodEnd = $periodStart->copy()->endOfMonth();
+
+        $budgets = Budget::query()
+            ->join('categories', 'categories.id', '=', 'budgets.category_id')
+            ->where('budgets.user_id', $userId)
+            ->where('budgets.year', $year)
+            ->where('budgets.month', $month)
+            ->selectRaw('budgets.category_id as category_id, categories.name as category_name, budgets.amount as budget_amount')
+            ->get();
+
+        $actuals = Transaction::query()
+            ->join('categories', 'categories.id', '=', 'transactions.category_id')
+            ->where('transactions.user_id', $userId)
+            ->where('transactions.type', 'expense')
+            ->whereDate('transactions.date', '>=', $periodStart->toDateString())
+            ->whereDate('transactions.date', '<=', $periodEnd->toDateString())
+            ->selectRaw('transactions.category_id as category_id, categories.name as category_name, SUM(transactions.amount) as actual_amount')
+            ->groupBy('transactions.category_id', 'categories.name')
+            ->get();
+
+        $categoryMap = [];
+
+        foreach ($budgets as $row) {
+            $categoryMap[(int) $row->category_id] = [
+                'category_id' => (int) $row->category_id,
+                'category_name' => $row->category_name,
+                'has_budget' => true,
+                'budget' => round((float) $row->budget_amount, 2),
+                'actual' => 0.0,
+            ];
+        }
+
+        foreach ($actuals as $row) {
+            $id = (int) $row->category_id;
+            $actual = round((float) $row->actual_amount, 2);
+
+            if (!isset($categoryMap[$id])) {
+                $categoryMap[$id] = [
+                    'category_id' => $id,
+                    'category_name' => $row->category_name,
+                    'has_budget' => false,
+                    'budget' => 0.0,
+                    'actual' => $actual,
+                ];
+                continue;
+            }
+
+            $categoryMap[$id]['actual'] = $actual;
+        }
+
+        $categories = array_values(array_map(function (array $row) {
+            $budget = (float) $row['budget'];
+            $actual = (float) $row['actual'];
+
+            $remaining = round($budget - $actual, 2);
+            $utilization = $budget > 0 ? round(($actual / $budget) * 100, 2) : null;
+
+            return [
+                ...$row,
+                'remaining' => $remaining,
+                'utilization_pct' => $utilization,
+            ];
+        }, $categoryMap));
+
+        $totalBudget = round((float) collect($categories)->sum('budget'), 2);
+        $totalActual = round((float) collect($categories)->sum('actual'), 2);
+        $totalRemaining = round($totalBudget - $totalActual, 2);
+        $totalUtilization = $totalBudget > 0 ? round(($totalActual / $totalBudget) * 100, 2) : null;
+
+        $overspent = collect($categories)
+            ->filter(fn(array $row) => (bool) $row['has_budget'] && (float) $row['actual'] > (float) $row['budget'])
+            ->map(function (array $row) {
+                $budget = (float) $row['budget'];
+                $actual = (float) $row['actual'];
+                $overspentAmount = round($actual - $budget, 2);
+
+                return [
+                    'category_id' => $row['category_id'],
+                    'category_name' => $row['category_name'],
+                    'budget' => round($budget, 2),
+                    'actual' => round($actual, 2),
+                    'overspent' => $overspentAmount,
+                    'utilization_pct' => $row['utilization_pct'],
+                ];
+            })
+            ->sortByDesc('overspent')
+            ->take($limit)
+            ->values();
+
+        return response()->json([
+            'year' => $year,
+            'month' => $month,
+            'limit' => $limit,
+            'period' => [
+                'start_date' => $periodStart->toDateString(),
+                'end_date' => $periodEnd->toDateString(),
+            ],
+            'totals' => [
+                'budget' => $totalBudget,
+                'actual' => $totalActual,
+                'remaining' => $totalRemaining,
+                'utilization_pct' => $totalUtilization,
+            ],
+            'overspent_categories' => $overspent,
+        ]);
+    }
+
+    public function budgetTemplateRecommendations(Request $request)
+    {
+        $rules = $this->baseRules($request);
+        $rules['reference_date'] = ['nullable', 'date'];
+        $rules['months'] = ['nullable', 'integer', 'min:1', 'max:12'];
+
+        $validated = $request->validate($rules);
+        $userId = $this->resolveUserId($request, $validated);
+
+        $referenceDate = Carbon::parse($validated['reference_date'] ?? now()->toDateString());
+        $months = (int) ($validated['months'] ?? 3);
+
+        $categories = Category::query()
+            ->where('user_id', $userId)
+            ->where('type', 'expense')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $monthWindows = [];
+        for ($i = 1; $i <= $months; $i++) {
+            $d = $referenceDate->copy()->subMonthsNoOverflow($i);
+            $monthWindows[] = [
+                'year' => (int) $d->year,
+                'month' => (int) $d->month,
+                'start' => $d->copy()->startOfMonth()->toDateString(),
+                'end' => $d->copy()->endOfMonth()->toDateString(),
+            ];
+        }
+
+        $spendByCategoryByMonth = [];
+        foreach ($categories as $category) {
+            $spendByCategoryByMonth[(int) $category->id] = array_fill(0, $months, 0.0);
+        }
+
+        foreach ($monthWindows as $idx => $win) {
+            $rows = Transaction::query()
+                ->where('user_id', $userId)
+                ->where('type', 'expense')
+                ->whereDate('date', '>=', $win['start'])
+                ->whereDate('date', '<=', $win['end'])
+                ->selectRaw('category_id, SUM(amount) as total')
+                ->groupBy('category_id')
+                ->get();
+
+            foreach ($rows as $row) {
+                $categoryId = (int) $row->category_id;
+                if (!isset($spendByCategoryByMonth[$categoryId])) {
+                    continue;
+                }
+                $spendByCategoryByMonth[$categoryId][$idx] = round((float) $row->total, 2);
+            }
+        }
+
+        $recommendations = $categories->map(function ($category) use ($months, $monthWindows, $spendByCategoryByMonth) {
+            $id = (int) $category->id;
+            $values = $spendByCategoryByMonth[$id] ?? array_fill(0, $months, 0.0);
+            $avg = $months > 0 ? round(array_sum($values) / $months, 2) : 0.0;
+
+            $history = [];
+            foreach ($monthWindows as $idx => $win) {
+                $history[] = [
+                    'year' => (int) $win['year'],
+                    'month' => (int) $win['month'],
+                    'actual' => (float) ($values[$idx] ?? 0.0),
+                ];
+            }
+
+            return [
+                'category_id' => $id,
+                'category_name' => $category->name,
+                'method' => 'average',
+                'months' => $months,
+                'recommended_amount' => $avg,
+                'history' => $history,
+            ];
+        })->values();
+
+        return response()->json([
+            'reference_date' => $referenceDate->toDateString(),
+            'months' => $months,
+            'recommendations' => $recommendations,
         ]);
     }
 }

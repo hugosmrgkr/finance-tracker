@@ -10,18 +10,16 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        Schema::create('budgets', function (Blueprint $table) {
+        Schema::create('budget_templates', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('category_id')->constrained()->cascadeOnDelete();
-            $table->unsignedSmallInteger('year');
-            $table->unsignedTinyInteger('month');
             $table->decimal('amount', 14, 2);
             $table->string('note')->nullable();
             $table->timestamps();
 
-            $table->unique(['user_id', 'category_id', 'year', 'month']);
-            $table->index(['user_id', 'year', 'month']);
+            $table->unique(['user_id', 'category_id']);
+            $table->index(['user_id']);
         });
     }
 
@@ -30,6 +28,6 @@ return new class extends Migration {
      */
     public function down(): void
     {
-        Schema::dropIfExists('budgets');
+        Schema::dropIfExists('budget_templates');
     }
 };

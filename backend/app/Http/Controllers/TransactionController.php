@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Transaction;
+use App\Models\Wallet;
 use Illuminate\Http\Request;
 
 class TransactionController extends Controller
@@ -34,6 +35,7 @@ class TransactionController extends Controller
             'end_date' => ['nullable', 'date'],
             'type' => ['nullable', 'in:income,expense'],
             'category_id' => ['nullable', 'integer'],
+            'wallet_id' => ['nullable', 'integer'],
         ];
 
         $validated = $request->validate($rules);
@@ -41,7 +43,7 @@ class TransactionController extends Controller
 
         $query = Transaction::query()
             ->where('user_id', $userId)
-            ->with('category')
+            ->with(['category', 'wallet'])
             ->orderByDesc('date')
             ->orderByDesc('id');
 
@@ -51,6 +53,10 @@ class TransactionController extends Controller
 
         if (!empty($validated['category_id'])) {
             $query->where('category_id', (int) $validated['category_id']);
+        }
+
+        if (!empty($validated['wallet_id'])) {
+            $query->where('wallet_id', (int) $validated['wallet_id']);
         }
 
         if (!empty($validated['start_date'])) {
@@ -69,6 +75,7 @@ class TransactionController extends Controller
         $rules = $this->baseRules($request);
         $rules += [
             'category_id' => ['required', 'integer'],
+            'wallet_id' => ['nullable', 'integer'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'type' => ['required', 'in:income,expense'],
             'date' => ['required', 'date'],
@@ -91,16 +98,30 @@ class TransactionController extends Controller
             return response()->json(['message' => 'Transaction type must match category type'], 422);
         }
 
+        $walletId = null;
+        if (array_key_exists('wallet_id', $validated) && $validated['wallet_id'] !== null) {
+            $walletId = (int) $validated['wallet_id'];
+            $wallet = Wallet::query()
+                ->whereKey($walletId)
+                ->where('user_id', $userId)
+                ->first();
+
+            if (!$wallet) {
+                return response()->json(['message' => 'Invalid wallet_id'], 422);
+            }
+        }
+
         $transaction = Transaction::create([
             'user_id' => $userId,
             'category_id' => (int) $validated['category_id'],
+            'wallet_id' => $walletId,
             'amount' => $validated['amount'],
             'type' => $validated['type'],
             'date' => $validated['date'],
             'note' => $validated['note'] ?? null,
         ]);
 
-        $transaction->load('category');
+        $transaction->load(['category', 'wallet']);
 
         return response()->json($transaction, 201);
     }
@@ -110,6 +131,7 @@ class TransactionController extends Controller
         $rules = $this->baseRules($request);
         $rules += [
             'category_id' => ['sometimes', 'integer'],
+            'wallet_id' => ['sometimes', 'nullable', 'integer'],
             'amount' => ['sometimes', 'numeric', 'min:0.01'],
             'type' => ['sometimes', 'in:income,expense'],
             'date' => ['sometimes', 'date'],
@@ -144,10 +166,28 @@ class TransactionController extends Controller
             return response()->json(['message' => 'Transaction type must match category type'], 422);
         }
 
+        if (array_key_exists('wallet_id', $validated)) {
+            if ($validated['wallet_id'] === null) {
+                $transaction->wallet_id = null;
+            } else {
+                $walletId = (int) $validated['wallet_id'];
+                $wallet = Wallet::query()
+                    ->whereKey($walletId)
+                    ->where('user_id', $userId)
+                    ->first();
+
+                if (!$wallet) {
+                    return response()->json(['message' => 'Invalid wallet_id'], 422);
+                }
+
+                $transaction->wallet_id = $walletId;
+            }
+        }
+
         $transaction->fill(collect($validated)->only(['category_id', 'amount', 'type', 'date', 'note'])->all());
         $transaction->save();
 
-        $transaction->load('category');
+        $transaction->load(['category', 'wallet']);
 
         return response()->json($transaction);
     }

@@ -4,12 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Category extends Model
+class Wallet extends Model
 {
     protected $fillable = [
         'user_id',
         'name',
-        'type',
     ];
 
     public function user()
@@ -20,15 +19,5 @@ class Category extends Model
     public function transactions()
     {
         return $this->hasMany(Transaction::class);
-    }
-
-    public function budgets()
-    {
-        return $this->hasMany(Budget::class);
-    }
-
-    public function budgetTemplates()
-    {
-        return $this->hasMany(BudgetTemplate::class);
     }
 }
