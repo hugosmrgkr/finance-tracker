@@ -14,7 +14,7 @@ class ApiCrudTest extends TestCase
 
     protected function setUp(): void
     {
-        if (! extension_loaded('pdo_sqlite')) {
+        if (!extension_loaded('pdo_sqlite')) {
             $this->markTestSkipped('pdo_sqlite extension is required to run database feature tests.');
         }
 
@@ -34,7 +34,7 @@ class ApiCrudTest extends TestCase
         $categoryResponse->assertCreated();
         $categoryId = $categoryResponse->json('id');
 
-        $this->getJson('/api/categories?user_id='.$user->id)
+        $this->getJson('/api/categories?user_id=' . $user->id)
             ->assertOk()
             ->assertJsonFragment(['id' => $categoryId]);
 
@@ -50,22 +50,22 @@ class ApiCrudTest extends TestCase
         $transactionResponse->assertCreated();
         $transactionId = $transactionResponse->json('id');
 
-        $this->getJson('/api/transactions?user_id='.$user->id)
+        $this->getJson('/api/transactions?user_id=' . $user->id)
             ->assertOk()
             ->assertJsonFragment(['id' => $transactionId]);
 
-        $this->putJson('/api/transactions/'.$transactionId, [
+        $this->putJson('/api/transactions/' . $transactionId, [
             'user_id' => $user->id,
             'amount' => 2000000,
         ])->assertOk();
 
-        $this->deleteJson('/api/transactions/'.$transactionId, [
+        $this->deleteJson('/api/transactions/' . $transactionId, [
             'user_id' => $user->id,
         ])->assertNoContent();
 
         $this->assertDatabaseMissing(Transaction::class, ['id' => $transactionId]);
 
-        $this->deleteJson('/api/categories/'.$categoryId, [
+        $this->deleteJson('/api/categories/' . $categoryId, [
             'user_id' => $user->id,
         ])->assertNoContent();
 

@@ -6,7 +6,7 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\TransactionController;
 
-Route::get('/health', fn () => response()->json(['status' => 'ok']));
+Route::get('/health', fn() => response()->json(['status' => 'ok']));
 
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::post('/categories', [CategoryController::class, 'store']);

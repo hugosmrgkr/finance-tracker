@@ -33,7 +33,7 @@ class CategoryController extends Controller
 
         $query = Category::query()->where('user_id', $userId);
 
-        if (! empty($validated['type'])) {
+        if (!empty($validated['type'])) {
             $query->where('type', $validated['type']);
         }
 

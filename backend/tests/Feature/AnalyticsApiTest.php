@@ -13,7 +13,7 @@ class AnalyticsApiTest extends TestCase
 
     protected function setUp(): void
     {
-        if (! extension_loaded('pdo_sqlite')) {
+        if (!extension_loaded('pdo_sqlite')) {
             $this->markTestSkipped('pdo_sqlite extension is required to run database feature tests.');
         }
 
@@ -66,7 +66,7 @@ class AnalyticsApiTest extends TestCase
             'date' => '2026-04-12',
         ])->assertCreated();
 
-        $summary = $this->getJson('/api/analytics/summary?user_id='.$user->id.'&start_date=2026-04-01&end_date=2026-04-30');
+        $summary = $this->getJson('/api/analytics/summary?user_id=' . $user->id . '&start_date=2026-04-01&end_date=2026-04-30');
         $summary->assertOk();
         $summary->assertJson([
             'income' => 1250000,
@@ -78,7 +78,7 @@ class AnalyticsApiTest extends TestCase
             ],
         ]);
 
-        $byCategory = $this->getJson('/api/analytics/by-category?user_id='.$user->id.'&start_date=2026-04-01&end_date=2026-04-30');
+        $byCategory = $this->getJson('/api/analytics/by-category?user_id=' . $user->id . '&start_date=2026-04-01&end_date=2026-04-30');
         $byCategory->assertOk();
         $byCategory->assertJsonFragment([
             'category_id' => $salary->id,
@@ -99,7 +99,7 @@ class AnalyticsApiTest extends TestCase
             'total' => 200000,
         ]);
 
-        $monthly = $this->getJson('/api/analytics/monthly?user_id='.$user->id.'&year=2026');
+        $monthly = $this->getJson('/api/analytics/monthly?user_id=' . $user->id . '&year=2026');
         $monthly->assertOk();
         $monthly->assertJsonPath('year', 2026);
 

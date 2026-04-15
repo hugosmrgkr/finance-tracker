@@ -45,19 +45,19 @@ class TransactionController extends Controller
             ->orderByDesc('date')
             ->orderByDesc('id');
 
-        if (! empty($validated['type'])) {
+        if (!empty($validated['type'])) {
             $query->where('type', $validated['type']);
         }
 
-        if (! empty($validated['category_id'])) {
+        if (!empty($validated['category_id'])) {
             $query->where('category_id', (int) $validated['category_id']);
         }
 
-        if (! empty($validated['start_date'])) {
+        if (!empty($validated['start_date'])) {
             $query->whereDate('date', '>=', $validated['start_date']);
         }
 
-        if (! empty($validated['end_date'])) {
+        if (!empty($validated['end_date'])) {
             $query->whereDate('date', '<=', $validated['end_date']);
         }
 
@@ -83,7 +83,7 @@ class TransactionController extends Controller
             ->where('user_id', $userId)
             ->first();
 
-        if (! $category) {
+        if (!$category) {
             return response()->json(['message' => 'Invalid category_id'], 422);
         }
 
@@ -132,7 +132,7 @@ class TransactionController extends Controller
             ->where('user_id', $userId)
             ->first();
 
-        if (! $category) {
+        if (!$category) {
             return response()->json(['message' => 'Invalid category_id'], 422);
         }
 
