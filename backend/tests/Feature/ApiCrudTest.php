@@ -14,11 +14,14 @@ class ApiCrudTest extends TestCase
 
     protected function setUp(): void
     {
-        if (!extension_loaded('pdo_sqlite')) {
-            $this->markTestSkipped('pdo_sqlite extension is required to run database feature tests.');
-        }
-
         parent::setUp();
+
+        $defaultConnection = config('database.default');
+        $driver = config("database.connections.{$defaultConnection}.driver");
+
+        if ($driver === 'sqlite' && !extension_loaded('pdo_sqlite')) {
+            $this->markTestSkipped('pdo_sqlite extension is required to run sqlite database feature tests.');
+        }
     }
 
     public function test_can_crud_categories_and_transactions(): void
